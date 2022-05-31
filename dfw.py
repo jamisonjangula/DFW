@@ -6,9 +6,11 @@ import matplotlib.pyplot as plt
 
 speed_threshold = 100 * 10**3 / 3600    # assuming max drone speed is 100 kph -> convert to m/s
 time_threshold = 5                      # assuming 5 seconds max between messages
+cutoff = 100                            # a flight must contain at least as many entries as the cutoff #
 
 inFile = './DFW.xlsx'
 outFile = './DFW_mod.csv'
+outFile_valuable = './DFW_valuable.csv'
 ro = 6378.137*1000.0      # radius of earth @ sea level in meters
 
 table = pd.read_excel(inFile, usecols=[0,3,4,5,6,7])
@@ -40,10 +42,10 @@ table['theta'] = 0.0
 table['distance'] = 0.0
 table['timeInterval'] = nan
 table['avgSpeed'] = nan
-
 table.loc[:, 'radius'] = float(ro) + table.loc[:, 'altitude_m']
 table.loc[:,'phi'] = pi + table.loc[:,'longitude'] * pi/180 # convert to radians
 table.loc[:,'theta'] = pi/2 + table.loc[:,'latitude'] * pi/180 # convert to radians
+valuableFlights = []  # flights with more entries than the specified cutoff
 
 flights = set(table['flightID'])
 for flight in flights:
@@ -52,14 +54,22 @@ for flight in flights:
     for i in range(0, len(tmpIDs)):
         if (tmpIDs[i]==True):
             ids.append(i)
+    if (len(ids) >= cutoff):
+        valuableFlights.append(flight)
     for i in range(0, len(ids)-1):
         mag = table.loc[ids[i], 'radius']**2 + table.loc[ids[i+1], 'radius']**2 - 2*table.loc[ids[i], 'radius']*table.loc[ids[i+1], 'radius']*(sin(table.loc[ids[i], 'theta'])*sin(table.loc[ids[i+1], 'theta'])*cos(table.loc[ids[i], 'phi'] - table.loc[ids[i+1], 'phi']) + cos(table.loc[ids[i], 'theta'])*cos(table.loc[ids[i+1], 'theta']))
         mag = (mag*mag)**0.5
-        table.loc[ids[i],'distance'] = sqrt(mag)
+        table.loc[ids[i],'distance'] = mag
         dt = (float(table.loc[ids[i+1],'timeEDT']) - float(table.loc[ids[i],'timeEDT']))
         table.loc[ids[i],'timeInterval'] = dt
         table.loc[ids[i],'avgSpeed'] = float(table.loc[ids[i],'distance']) / float(dt)
-table.to_csv(outFile)
+
+val = []
+for i in range(0,len(table['flightID'][:])):
+    if (table['flightID'][i] in valuableFlights):
+        val.append(i)
+valTable = table.loc[val, :]
+valTable.to_csv(outFile_valuable)
 
 for i in range(0, len(table.timeEDT)):
     table.loc[i,'speed'] = float(table.loc[i,'speed'])
@@ -71,7 +81,7 @@ max_lat = max(table['latitude'][:])
 min_lon = min(table['longitude'][:])
 max_lon = max(table['longitude'][:])
 
-print(str(min_lat) + ' < latitude <' + str(max_lat))
+print(str(min_lat) + '  < latitude  < ' + str(max_lat))
 print(str(min_lon) + ' < longitude < ' + str(max_lon))
 
 dropoutSpeed = table['avgSpeed'][:] >= speed_threshold
@@ -87,10 +97,11 @@ for i in range(0, len(dropoutSpeed)):
 for i in dropTime:
     if i in dropSpeed:
         dropBoth.append(i)
+print('# of flights with > ' + str(cutoff) + ' entries = ' + str(len(valuableFlights)))
 print('# of dropouts detected by speed    = ' + str(len(dropSpeed)))
 print('# of dropouts detected by interval = ' + str(len(dropTime)))
 print('# of dropouts detected by both     = ' + str(len(dropBoth)))
-
+"""
 ax1 = plt.subplot(311)
 ax1.scatter(table.loc[dropSpeed,'longitude'], table.loc[dropSpeed,'latitude'], 3, label='speed')
 ax1.legend()
@@ -111,3 +122,4 @@ plt.ylim([min_lat, max_lat])
 plt.xlabel('Longitude (Deg)')
 plt.ylabel('Latitude (Deg)')
 plt.show()
+"""
