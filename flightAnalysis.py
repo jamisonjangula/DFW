@@ -1,7 +1,7 @@
 import pyarrow.parquet as pq
 import pandas as pd
 import numpy as np
-from math import pi, cos, sin, sqrt
+from math import sqrt, nan, isnan
 from mpl_toolkits import mplot3d
 from matplotlib.animation import FuncAnimation, writers
 import matplotlib.pyplot as plt
@@ -10,8 +10,47 @@ inFile = './DFW_valuable.csv'
 outPref = './DFW_flight'        # prefix for output file
 isRed = True
 
-table = pd.read_csv(inFile, usecols=[1,2,3,4,6])
+table = pd.read_csv(inFile)
 flights = set(table['flightID'])
+# Find dropouts using RMS
+outliers_cumulative = []
+outliers = []
+K = 2
+for flight in flights:
+    interval = list(table.loc[table['flightID'] == flight, 'timeInterval'])
+    index = list(table.loc[table['flightID'] == flight, 'index'])
+    while True:
+        RMSE = 0.0
+        mean = 0.0
+        for item in interval:
+            item = float(item)
+            if (not isnan(item)):
+                mean += item
+        mean = mean / (len(interval)-1)
+        for item in interval:
+            item = float(item)
+            if (not isnan(item)):
+                RMSE += (item - mean)**2
+        RMSE = sqrt(RMSE/(len(interval)-1))
+        upBound = mean + K*RMSE
+        i = 0
+        while (i < len(interval)):
+            if (not isnan(interval[i])):
+                if (float(interval[i]) > upBound):
+                    outliers.append(index[i])
+                    interval.pop(i)
+                    index.pop(i)
+            i += 1
+        if (len(outliers) == 0):
+            break
+        outliers_cumulative += outliers
+        outliers = []
+
+table['outlier'] = 'NO'
+for outlier in outliers_cumulative:
+    table.loc[table['index'] == outlier, 'outlier'] = 'YES'
+table.to_csv(inFile, index=False)
+
 for flight in flights:
     latitude = list(table.loc[table['flightID'] == flight, 'latitude'])
     longitude = list(table.loc[table['flightID'] == flight, 'longitude'])
