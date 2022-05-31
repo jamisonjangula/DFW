@@ -1,0 +1,2 @@
+# step 1) run dfw.py in the folder condaining the original data spreadsheet. This will create DFW_valuable.csv
+# step 2) run flightAnalysis.py to detect dropouts based on iterative outlier detection and to produce videos of flight paths
